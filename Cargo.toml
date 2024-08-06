@@ -1,0 +1,8 @@
+[package]
+name = "twt-werewolf-master-ng"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+crossterm = "0.28.1"
+inquire = "0.7.5"

@@ -1,96 +1,37 @@
-mod comm;
-use comm::Server;
+use std::iter;
+
 use inquire::{MultiSelect, Text};
-use core::{fmt, panic};
-use std::net::TcpStream;
-mod villager;
-use villager::VillagerRole;
-mod werewolf;
-use werewolf::WerewolfRole;
-mod hunter;
-use hunter::HunterRole;
 use rand::{seq::SliceRandom, thread_rng};
 
+mod roles;
+use roles::LifeStatus;
+use roles::RoleGroup;
+use roles::Responder;
+use roles::responder;
+use roles::Identity::{*, self};
+
+type RespBoxes = Vec<Box<dyn Responder>>;
+type RespBoxesMut<'a> = Vec<&'a mut Box<dyn Responder>>;
+
+#[derive(Default)]
 pub struct Judger {
-    characters: Vec<Box<dyn Role>>,
-    players: Vec<Player>,
-    player_num: usize,
-    idents: Vec<(identity, usize)>,
+    players: RespBoxes,
+    groups: Vec<Box<dyn RoleGroup>>,
     bind_addr: String,
-}
-
-trait Role {
-    fn born(&self, players: Vec<&mut Player>) {}
-    fn day(&self, players: Vec<&mut Player>) {}
-    fn night(&self, players: Vec<&mut Player>) {}
-    fn die(&self, players: Vec<&mut Player>) {}
-}
-
-enum LifeStatus {
-    Alive,
-    Dead,
-    NewDead,
-}
-
-struct Player {
-    ser: TcpStream,
-    id: usize,
-    status: LifeStatus,
-    place: identity,
-    username: String,
-}
-
-
-/// 玩家的身份。
-#[derive(Clone)]
-enum identity {
-    Villager,
-    Werewolf,
-    Hunter,
-    Raw,
-}
-
-use identity::{Villager, Werewolf, Hunter, Raw};
-
-impl fmt::Display for identity {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Villager => write!(f, "村民"),
-            Werewolf => write!(f, "狼人"),
-            Hunter => write!(f, "猎人"),
-            Raw => write!(f, "未分配"),
-        }
-    }
+    enabled_roles: Vec<(Identity, usize)>,
+    player_num: usize,
 }
 
 impl Judger {
-    pub fn new() -> Self {
-        Judger {
-            characters: Vec::new(),
-            players: Vec::new(),
-            player_num: 0,
-            idents: Vec::new(),
-            bind_addr: String::new(),
-        }
-    }
-
-    fn map_role(x: &identity) -> Box<dyn Role> {
-        match x {
-            Villager => Box::new(VillagerRole::new()),
-            Werewolf => Box::new(WerewolfRole::new()),
-            Hunter => Box::new(HunterRole::new()),
-            Raw => panic!("roles error"),
-        }
-    }
-
-    fn get_option(&mut self) {
+    fn get_bind_addr(&mut self) {
         self.bind_addr = Text::new("绑定地址").prompt().unwrap();
+    }
 
+    fn get_enabled(&mut self) {
         let opt_list = vec!["猎人"];
         let role_list = vec![Hunter,];
         let opt = MultiSelect::new("配置", opt_list.clone()).prompt().unwrap();
-
-        let mut enabled_roles: Vec<_> = opt_list
+        self.enabled_roles = opt_list
             .iter()
             .enumerate()
             .filter_map(|(i, s)| {
@@ -99,66 +40,105 @@ impl Judger {
                 .find(|x| *x == s)
                 .map(|_| role_list[i].clone())
             })
-            .collect();
-        enabled_roles = vec![Villager, Werewolf].into_iter()
-            .chain(enabled_roles.into_iter()).collect();
-
-        for s in enabled_roles.iter() {
-            let num = Text::new(&format!("{} 的数量", *s)).prompt().
-                unwrap().parse::<usize>().unwrap();
-            self.player_num += 1;
-            self.idents.push((s.clone(), num));
-        }
-
-        self.characters = enabled_roles.iter()
-            .map(Self::map_role)
+            .chain(vec![Villager, Werewolf].into_iter())
+            .zip(iter::repeat(0usize))
             .collect();
     }
 
+    fn get_nums(&mut self) {
+        for (ident, x) in self.enabled_roles.iter_mut() {
+            let num = Text::new(&format!("{} 的数量", ident)).prompt().
+                unwrap().parse::<usize>().unwrap();
+            self.player_num += num;
+            *x = num;
+        }
+    }
+
+    fn get_config(&mut self) {
+        self.get_bind_addr();
+        self.get_enabled();
+    }
+
+    fn get_option(&mut self) {
+        self.get_config();
+        self.get_nums();
+    }
+
     fn build_connect(&mut self) {
-        let ser = Server::new(&self.bind_addr, self.player_num);
-        let clients = ser.get_stream();
-        self.players = clients
-            .into_iter()
-            .enumerate()
-            .map(|(i, s)| Player{
-                ser: s,
-                id: i,
-                status: LifeStatus::Alive,
-                place: Raw,
-                username: String::new(),
-            })
-            .map(move |mut x| {
-                Server::send(&mut x.ser, "?");
-                x.username = Server::rec(&mut x.ser);
-                x
-            })
-            .collect();
+        self.players = responder::human::build_connect(&self.bind_addr, self.player_num);
+        self.players.iter_mut().for_each(|x| x.set_name());
+        self.players.iter_mut().enumerate().for_each(|(i, x)| x.set_id(i + 1));
     }
 
     fn assign_role(&mut self) {
         self.players.shuffle(&mut thread_rng());
         let mut cnt = 0;
-        for (iden, num) in &self.idents {
-            let cha = Self::map_role(iden);
-            cha.born(self.players.iter_mut().skip(cnt).take(*num).collect());
+        for (iden, num) in &self.enabled_roles {
+            self.players.iter_mut().skip(cnt).take(*num)
+                .for_each(|x| {
+                    x.set_role(iden.clone());
+                    x.send_msg(&format!("{}", iden));
+                });
             cnt += num;
         }
+        self.groups = self.players
+            .iter()
+            .map(|x| roles::role_map(x.role()))
+            .collect();
     }
 
-    /// 处理夜晚的事件。夜晚事件要按照 characters 中的顺序理。
-    fn night(characters: &mut Vec<Box<dyn Role>>, players: &mut Vec<Player>) {}
+    fn night(players: &mut RespBoxes, groups: &Vec<Box<dyn RoleGroup>>) {
+        groups.iter().for_each(|x| x.night(
+            players.iter_mut().collect()    
+        ));
+        players.iter_mut().for_each(|x| x.send_end());
+    }
 
-    fn deal_death(characters: &mut Vec<Box<dyn Role>>, players: &mut Vec<Player>) {}
+    fn day(players: &mut RespBoxes) {
+        responder::chat(players.iter_mut().collect());
+    }
 
-    fn day(characters: &mut Vec<Box<dyn Role>>, players: &mut Vec<Player>) {}
+    fn devide(&mut self) -> (RespBoxesMut, RespBoxesMut, RespBoxesMut) {
+        let living: Vec<_> = self.players.iter_mut()
+            .filter(|x| x.status() == LifeStatus::Alive)
+            .collect();
+        let (wolves, others): (Vec<_>, Vec<_>) = living
+            .into_iter().partition(|x| x.role() == Werewolf);
+        let (men, clergies): (Vec<_>, Vec<_>) = others.into_iter()
+            .partition(|x| x.role() == Villager);
+        (wolves, men, clergies)
+    }
+
+    fn is_over(&mut self) -> bool {
+        let (wolves, men, clergies) = self.devide();
+        let mut msg = String::new();
+        if wolves.len() >= men.len() + clergies.len() || clergies.is_empty() {
+            msg = "狼人胜利".to_string();
+        }
+        else if wolves.is_empty() {
+            msg = "好人胜利".to_string();
+        }
+        self.players.iter_mut()
+            .for_each(|x| {
+                if msg.is_empty() {
+                    x.coutinue_game();
+                }
+                else {
+                    x.game_over(msg.clone());
+                }
+            });
+        !msg.is_empty()
+        
+    }
 
     fn run(&mut self) {
         loop {
-            Self::night(&mut self.characters, &mut self.players);
-            Self::deal_death(&mut self.characters, &mut self.players);
-            Self::day(&mut self.characters, &mut self.players);
-            Self::deal_death(&mut self.characters, &mut self.players);
+            Self::night(&mut self.players, &self.groups);
+            roles::check_death(&mut self.players);
+            if self.is_over() { break; }
+            Self::day(&mut self.players);
+            roles::check_death(&mut self.players);
+            if self.is_over() { break; }
         }
     }
 

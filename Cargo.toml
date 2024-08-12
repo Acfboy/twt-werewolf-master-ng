@@ -1,12 +1,15 @@
 [package]
 name = "twt-werewolf-master-ng"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4.38"
 colored = "2.1.0"
 crossterm = "0.28.1"
 indicatif = "0.17.8"
 inquire = "0.7.5"
 rand = "0.8.5"
+reqwest = "0.12.5"
 serde_json = "1.0.122"
+tokio = { version = "1.2.0", features = ["full"] }

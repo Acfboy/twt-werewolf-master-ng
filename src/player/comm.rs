@@ -56,8 +56,8 @@ impl Client {
     pub fn rec(&mut self) -> String {
         let msg = Self::read_line(&mut self.stream);
         let res = String::from_utf8(msg).unwrap();
-        #[cfg(debug_assertions)]
-        println!("{}: {}", "Received", res);
+        // #[cfg(debug_assertions)]
+        // println!("{}: {}", "Received", res);
         res
     }
 
@@ -72,8 +72,8 @@ impl Client {
     pub fn send(&mut self, message: &str) {
         let message = format!("{}\x07", message);
         self.stream.write_all(message.as_bytes()).unwrap();
-        #[cfg(debug_assertions)]
-        println!("{}: {}", "Sended", message);
+        // #[cfg(debug_assertions)]
+        // println!("{}: {}", "Sended", message);
     }
 
     pub fn transimit(&mut self, x: Message) {
@@ -99,15 +99,31 @@ impl Client {
             _ => panic!("received type error"),
         }
     }
+
+    pub fn begin(&mut self) {
+        let res = self.receive();
+        match res {
+            Begin => return,
+            _ => panic!("begin error"),
+        }
+    }
+
+    pub fn end(&mut self) {
+        let res = self.receive();
+        match res {
+            End => return,
+            _ => panic!("end error"),
+        }
+    }
 }
 
 pub fn vote(cli: &mut Client) {
     let pmt = cli.receive().unwrap();
     let s = cli.receive().unwrap();
     let list: Vec<String> = serde_json::from_str(&s).unwrap();
+    println!();
     let inq = Select::new(&pmt, list.clone()).prompt().unwrap();
     for c in list.into_iter().enumerate() {
         if c.1 == inq { cli.transimit(Number(c.0)); break; }
     }
-    cli.rec();
 }

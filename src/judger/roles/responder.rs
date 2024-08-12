@@ -2,11 +2,13 @@ use super::Identity::{self, *};
 use super::LifeStatus::{self, *};
 pub mod human;
 pub mod widget;
+pub mod doubao_ai;
+pub mod debug_bot;
 pub use widget::*;
 use super::RespBoxesMut;
 
 pub trait Responder {
-    fn send(&mut self, msg: &str) { }
+    fn send(&mut self, _msg: &str) { }
 
     fn rec(&mut self) -> String { String::new() }
 
@@ -57,27 +59,26 @@ pub trait Responder {
         self.send_msg(msg);
         self.send_json(&json);
         let x = self.rec_number();
-        self.send_end();
-        (format!("{} -> {}\n", self.name(), names[x]), id[x])
+        (format!("{} -> {}", self.name(), names[x]), id[x])
     }
 
     fn role(&self) -> Identity {
         Raw
     }
 
-    fn set_role(&mut self, r: Identity) {}
+    fn set_role(&mut self, _r: Identity) {}
 
     fn status(&self) -> LifeStatus {
         Alive
     }
 
-    fn set_status(&mut self, s: LifeStatus) {}
+    fn set_status(&mut self, _s: LifeStatus) {}
 
     fn set_name(&mut self) {}
 
     fn name(&self) -> String { String::new() }
 
-    fn set_id(&mut self, id: usize) {}
+    fn set_id(&mut self, _id: usize) {}
 
     fn get_id(&self) -> usize { 0 }
 
@@ -88,4 +89,6 @@ pub trait Responder {
     fn game_over(&mut self, msg: String) {
         self.send_msg(&msg);
     }
+
+    fn cost(&self) -> (u64, u64) { (0, 0) }
 }

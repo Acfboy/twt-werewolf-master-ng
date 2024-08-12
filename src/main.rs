@@ -10,7 +10,7 @@ fn main() {
     let mes = "请选择模式";
     let res = Select::new(mes, opt).prompt().unwrap();
     match res {
-        "服务器" => Judger::default().init(),
+        "服务器" => Judger::new().init(),
         "玩家" => Player::new().init(),
         _ => (),
     }

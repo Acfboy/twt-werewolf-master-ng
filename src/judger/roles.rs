@@ -7,11 +7,12 @@ mod villager;
 mod werewolf;
 mod hunter;
 
+use super::log::Log;
 use super::RespBoxes;
 use super::RespBoxesMut;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-enum DeathReason {
+pub enum DeathReason {
     Normal,
     Gun,
 }
@@ -51,7 +52,8 @@ pub fn role_map(r: Identity) -> Box<dyn RoleGroup> {
     }
 }
 
-pub fn check_death(players: &mut RespBoxes) {
+pub fn check_death(players: &mut RespBoxes, log: &mut Log) {
+    println!("--CHECKING DEATH--");
     let (gone, mut others): (Vec<_>, Vec<_>) = 
         players.iter_mut()
         .partition(|x| matches!(x.status(), LifeStatus::NewDeath(_)));
@@ -64,14 +66,16 @@ pub fn check_death(players: &mut RespBoxes) {
     let dying = dying.unwrap();
     let group = role_map(dying.role());
     others = others.into_iter().chain(iter_gone).collect();
-    group.death(others, dying);
-    check_death(players);
+    group.death(others, dying, log);
+    check_death(players, log);
 }
 
 pub trait RoleGroup {
-    fn day(&self, players: RespBoxesMut) {}
+    #[allow(dead_code)]
+    fn day(&self, _players: RespBoxesMut) {
+    }
 
-    fn night(&self, players: RespBoxesMut) {}
+    fn night(&self, _players: RespBoxesMut, _log: &mut Log) {}
 
     /// 角色请一个个死，死亡判断由 Basic::chat 处理后一个个传给每个角色组。
     /// - 遗言需要广播给所有人，players 需要传入所有人。
@@ -79,15 +83,16 @@ pub trait RoleGroup {
     fn death(
         &self, 
         mut players: RespBoxesMut, 
-        dying: &mut Box<dyn super::Responder>
+        dying: &mut Box<dyn super::Responder>,
+        log: &mut Log
     ) {
         players.iter_mut()
             .for_each(|x| x.send_msg(&format!("{} 死了。", dying.name())));
         dying.send_begin();
         dying.send_msg("你死了，请发表遗言。");
         dying.set_status(LifeStatus::Dead);
-        let words = format!("{}: {}", dying.name(), dying.rec_text());
-        dying.send_end();
+        let words = format!("{}的遗言: {}", dying.name(), dying.rec_text());
+        log.write(&words);
         players.into_iter().for_each(|x| x.send_msg(&words));
     }
 }

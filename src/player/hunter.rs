@@ -10,7 +10,6 @@ impl super::Role for Hunter {
     }
 
     fn dead(&self, cli: &mut Client) {
-        cli.rec();
         let inq = Text::new(&cli.receive().unwrap()).prompt().unwrap();
         cli.transimit(Message::Text(inq));
         vote(cli);

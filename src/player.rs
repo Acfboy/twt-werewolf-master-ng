@@ -20,14 +20,27 @@ pub struct Player {
 }
 
 trait Role {
-    fn born(&self, id: u64, username: String) {}
+    fn born(&self, _id: u64, _username: String) {}
 
     fn night(&self, cli: &mut Client)  {
-        let _night_over = cli.rec();
+        let _night_over = cli.end();
+        pause();
     }
 
     fn day(&self, cli: &mut Client) {
-        cli.rec();
+        cli.begin();
+        loop {
+            let msg = cli.receive();
+            match msg {
+                Message::Begin => {
+                    let inq = Text::new("发言：").prompt().unwrap();
+                    cli.transimit(Message::Text(inq));
+                }
+                Message::Text(s) => println!("{s:}"),
+                Message::End => break,
+                _ => panic!("error rece type"),
+            }
+        }
         loop {
             let msg = cli.receive();
             match msg {
@@ -43,10 +56,24 @@ trait Role {
         let msg = cli.receive().unwrap();
         let inq = Text::new(&msg).prompt().unwrap();
         cli.transimit(Message::Text(inq));
-        cli.rec();
+        watch(cli);
     }
 }
 
+fn watch(cli: &mut Client) {
+    println!("[观战模式]");
+    loop {
+        let msg = cli.receive();
+        if let Message::Text(s) = msg {
+            println!("{s:}");
+            if s == "好人胜利" || s == "狼人胜利" {
+                break;
+            }
+        }
+    }
+    pause();
+    std::process::exit(0);
+}
 
 /// 没有分配角色前的角色，实现了 Role trait。
 struct RawRole { }
@@ -62,7 +89,15 @@ fn pause() {
 
 impl Player {
     pub fn new() -> Self {
-        let addr = Text::new("服务器地址").prompt().unwrap();
+        let addr ;
+        #[cfg(not(debug_assertions))] 
+        {
+            addr = Text::new("服务器地址").prompt().unwrap();
+        }
+        #[cfg(debug_assertions)]
+        {
+            addr = "127.0.0.1:8080".to_string();
+        }
         let username = Text::new("昵称").prompt().unwrap();
         let mut cli = Client::new(addr);
         let id = cli.rec_number();
@@ -111,10 +146,6 @@ impl Player {
         self.play();
     }
 
-    fn watch(&mut self, s: String) {
-        todo!();
-    }
-
     /// 检查事件执行后的状态。
     fn is_over(cli: &mut Client) {
         let status = cli.receive();
@@ -158,6 +189,7 @@ impl Player {
             Self::check_death(&mut self.role, &mut self.cli);
             Self::is_over(&mut self.cli);
             Self::clear();
+            pause();
             println!("天黑请闭眼。");
         }
     }

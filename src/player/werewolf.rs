@@ -7,7 +7,6 @@ impl super::Role for Werewolf {
         println!("{}（{} 号）你的角色是 狼人。", username, id);
     }
     fn night(&self, cli: &mut Client) {
-        cli.rec();
         loop {
             let msg = cli.receive();
             match msg {

@@ -69,11 +69,12 @@ impl Doubao {
         }));
     }
 
+    /// 向大模型 api 请求并获得回应。
     async fn async_get_res(&mut self) -> Result<(), Box<dyn std::error::Error>>  {
         let url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions";
         let client = Client::new();
         let payload = json!({
-            "model": std::env::var("AI_MODEL").unwrap(),
+            "model": std::env::var("ENDPOINT_ID").unwrap(),
             "messages": self.prompts.clone(),
         });
     
@@ -102,6 +103,8 @@ impl Doubao {
         Ok(())
     }
 
+    
+    /// 发送之前的所有信息提供给大模型并获得回复，不懂异步，直接阻塞。
     fn get_res(&mut self) {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {

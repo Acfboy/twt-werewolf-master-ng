@@ -7,9 +7,13 @@ pub mod debug_bot;
 pub use widget::*;
 use super::RespBoxesMut;
 
+/// 定义响应器特型。  
+/// 响应器特型里实现了服务器需要的各种和玩家交互的方法。
 pub trait Responder {
+    /// 发送原始信息。ai 玩家不需要原始信息。
     fn send(&mut self, _msg: &str) { }
 
+    /// 接收一条原始信息。ai 玩家不需要接收原始信息。
     fn rec(&mut self) -> String { String::new() }
 
     /// 默认实现发送数字，开头以 `n` 标记。
@@ -17,6 +21,7 @@ pub trait Responder {
         self.send(&format!("n{}", x.to_string()));
     }
 
+    /// 接收一个数字。
     fn rec_number(&mut self) -> usize {
         let msg = self.rec();
         assert_eq!(msg.chars().nth(0).unwrap(), 'n');
@@ -27,7 +32,6 @@ pub trait Responder {
     fn send_begin(&mut self) {
         self.send("y");
     }
-
 
     /// 表示一次等待的结束作为结束。
     fn send_end(&mut self) {
@@ -51,7 +55,8 @@ pub trait Responder {
         self.send(&format!("j{}", jstr));
     }
 
-    /// 投票。返回 (详情字符串, 选票指向的 id)。
+    /// 投票。返回 (详情字符串, 选票指向的 id)。  
+    /// 注意投票需要开始信号，因为平票多次投票中，玩家只多次响应单次投票，而把详细信息当作普通信息显示。
     fn vote(&mut self, msg: &str, list: Vec<(usize, String)>) -> (String, usize) {
         let (id, names): (Vec<_>, Vec<_>) = list.into_iter().unzip();
         let json = serde_json::to_string(&names).unwrap();
@@ -82,10 +87,12 @@ pub trait Responder {
 
     fn get_id(&self) -> usize { 0 }
 
+    /// 在玩家端游戏结束判定时发送继续游戏。其实只是发送一个结束信号。
     fn coutinue_game(&mut self) {
         self.send_end();
     }
 
+    /// 在玩家端结束游戏判定时发送游戏结束信息。其实只是发送一条获胜信息。
     fn game_over(&mut self, msg: String) {
         self.send_msg(&msg);
     }

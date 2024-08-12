@@ -14,15 +14,19 @@ pub struct Human {
     status: LifeStatus,
 }
 
+/// 给已连接玩家发送一个 `+` 表示新增一名玩家。
 fn reley_prev(clients: &mut Vec<Human>) {
     clients.iter_mut().for_each(|x| x.send("+"));
 }
 
+/// 发送已连接玩家数和总玩家数。
 fn return_num(client: &mut Human, pos: usize, len: usize) {
     client.send_number(pos);
     client.send_number(len);
 }
 
+
+/// 人类玩家建立连接。需要在每次新连接建立时给已经建立的玩家发送信号以更新进度条。
 pub fn build_connect(addr: &String, num: usize) -> Vec<Box<dyn Responder>> {
     let listener = TcpListener::bind(&addr).expect(NET_ERR);
     let mut clients = Vec::new();
@@ -52,6 +56,7 @@ impl Human {
         }
     }
 
+    /// `TcpStream` 是流式的，不区分多条信息。这里用蜂鸣器控制字符作为分隔不同信息的方式。
     fn read_line(&mut self) -> Vec<u8> {
         let mut buf: [u8; 1] = [0];
         let mut res = Vec::new();

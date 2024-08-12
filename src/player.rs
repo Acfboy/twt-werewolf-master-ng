@@ -1,5 +1,7 @@
+//! 玩家端。
+
 use inquire::Text;
-mod comm;
+pub mod comm;
 use comm::Client;
 use indicatif::{ProgressBar, ProgressStyle};
 use crossterm::terminal::{Clear, ClearType};
@@ -11,6 +13,7 @@ use werewolf::Werewolf;
 mod hunter;
 use hunter::Hunter;
 use comm::Message;
+
 
 pub struct Player {
     cli: Client,
@@ -75,7 +78,7 @@ fn watch(cli: &mut Client) {
     std::process::exit(0);
 }
 
-/// 没有分配角色前的角色，实现了 Role trait。
+/// 没有分配角色前的角色。
 struct RawRole { }
 
 impl Role for RawRole { }
@@ -146,7 +149,7 @@ impl Player {
         self.play();
     }
 
-    /// 检查事件执行后的状态。
+    /// 检查游戏是否结束。
     fn is_over(cli: &mut Client) {
         let status = cli.receive();
         match status {
@@ -159,6 +162,7 @@ impl Player {
         }
     }
 
+    /// 检查死亡。为了处理多个死亡的情形已经方便死亡提示，当收到开始信号后再进行死亡动作，其它消息直接输出。
     fn check_death(role: &mut Box<dyn Role>, cli: &mut Client) {
         loop {
             let msg = cli.receive();
@@ -171,6 +175,7 @@ impl Player {
         }
     }
 
+    /// 清空屏幕。
     fn clear() {
         crossterm::execute!(stdout(), Clear(ClearType::All)).unwrap();
     }

@@ -1,3 +1,5 @@
+//! 实现底层通讯。
+
 use std::net::TcpStream;
 use std::io::{Read, Write};
 use serde_json;
@@ -9,6 +11,7 @@ pub struct Client {
     pub stream: TcpStream,
 }
 
+/// 收到信息的类型。
 pub enum Message {
     Text(String),
     Number(usize),
@@ -18,6 +21,7 @@ pub enum Message {
 }
 
 impl Message {
+    /// 方便从消息中获得原始信息和 json 字符串。
     pub fn unwrap(self) -> String {
         match self {
             Text(s) | Json(s) => s,
@@ -34,6 +38,7 @@ impl Client {
         Client { stream }
     }
 
+    /// 接收一条消息。TcpStream 是流式的，没有消息分隔。这里以蜂鸣器控制字符分隔。
     fn read_line(stream: &mut TcpStream) -> Vec<u8> {
         let mut buf: [u8; 1] = [0];
         let mut res = Vec::new();
@@ -53,6 +58,7 @@ impl Client {
         res
     }
 
+    /// 接收原始信息。
     pub fn rec(&mut self) -> String {
         let msg = Self::read_line(&mut self.stream);
         let res = String::from_utf8(msg).unwrap();
@@ -61,6 +67,7 @@ impl Client {
         res
     }
 
+    /// 接收数字，收到的不是数字说明服务端出了大问题，直接 panic。
     pub fn rec_number(&mut self) -> u64 {
         let res = self.receive();
         if let Number(x) = res {
@@ -69,6 +76,7 @@ impl Client {
         else { panic!("not a number"); }
     }
 
+    /// 发送原始信息。
     pub fn send(&mut self, message: &str) {
         let message = format!("{}\x07", message);
         self.stream.write_all(message.as_bytes()).unwrap();
@@ -76,6 +84,7 @@ impl Client {
         // println!("{}: {}", "Sended", message);
     }
 
+    /// 发送 [`Message`] 封装好的信息。
     pub fn transimit(&mut self, x: Message) {
         match x {
             Text(s) => self.send(&format!("t{}", s)),
@@ -85,6 +94,7 @@ impl Client {
         }
     }
 
+    /// 接收消息，用 [`Message`] 封装好。
     pub fn receive(&mut self) -> Message {
         let msg = self.rec();
         let mut it = msg.chars();
@@ -100,6 +110,7 @@ impl Client {
         }
     }
 
+    /// 接收一次开始信号。
     pub fn begin(&mut self) {
         let res = self.receive();
         match res {
@@ -108,6 +119,7 @@ impl Client {
         }
     }
 
+    /// 接收一次结束信号
     pub fn end(&mut self) {
         let res = self.receive();
         match res {
@@ -117,6 +129,8 @@ impl Client {
     }
 }
 
+
+/// 回应单次投票。
 pub fn vote(cli: &mut Client) {
     let pmt = cli.receive().unwrap();
     let s = cli.receive().unwrap();
